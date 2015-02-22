@@ -1,5 +1,7 @@
 library(shiny)
 library(ggplot2)
+library(caret)
+library(ggvis)
 
 WCraw <- read.csv("data/worldCup.csv")
 
@@ -27,62 +29,90 @@ colnames(WCstats)[1:4] <- c("PLAYER", "LEAGUE", "POSITION", "TEAM")
 
 playerData <- WCstats
 
+## training set
+
+training <- playerData[,c("PLAYER", "POSITION", "TOP_SPEED", "TOTAL_GOALS_SCORED", "DISTANCE_COVERED", "TOTAL_PASSES", "CROSSES", "SOLO_RUNS_INTO_AREA")]
+
+training1 <- lapply(training[,-c(1,2)], scale)
+training2 <- (as.data.frame(training1))
+
+
+nrow(training2) ## 523
+training2 <- replace(training2, is.na(training2), 0)
+
+km <- kmeans(training2, 50, iter.max=100, nstart=1)
+
+plot(training2$TOP_SPEED, training2$CROSSES)
+points(km$centers, col="red", pch=20)
+myResults <- cbind(training, km$cluster)
+
+colnames(myResults) <- c("PLAYER", "POSITION", "TOP_SPEED", "TOTAL_GOALS_SCORED", "DISTANCE_COVERED", "TOTAL_PASSES", "CROSSES", "SOLO_RUNS_INTO_AREA", "CLUSTER")
+
+compResults <- function(x){
+  myResults[myResults$CLUSTER==x,c(1,2)]
+}
+
+yy <- myResults[myResults$CLUSTER==3, c(1,2)]
+
+closest.cluster <- function(x) {
+  cluster.dist <- apply(km$centers, 1, function(y) sqrt(sum((x-y)^2)))
+  return(which.min(cluster.dist)[1])
+}
+
+
 
 shinyServer(
   function(input, output){
       
-  
     selectedData <- reactive({
-      playerData[, c(input$xVar, input$yVar, playerData$POSITION)]
-    })  
+      playerData[, c(input$xcol, input$ycol)]
+   })  
     
+     
+    ##selectedData <- as.data.frame(playerData[,c(input$xcol, input$ycol, playerData$POSITION)])
     
   output$oPosition <- renderPrint({input$Position})
   
-  playerDataGraph <- playerData
-  
-      
   output$graph1 <- renderPlot ({
     
-    if(input$Position=="All"){
-      
-      theGraph <- ggplot(data=playerData, aes(x=TOP_SPEED,
-                  y=DISTANCE_COVERED, group=POSITION)) + ggtitle("All Positions") + ylab("Distance Covered per Game (km)") + xlab("Top Speed (km/h)") + geom_point(aes(size=4, colour=POSITION))
-    }
+    plot(selectedData(), col="red")  
+           
+    })
+  
+  ## data for kmeans
+ 
+    df <- reactive({c(input$topSpeed, input$goals, input$distance, input$passes, input$crosses, input$soloRuns) })
+  
+  
+   output$view <- renderText({ 
+   ## aa <- c(input$topSpeed, input$goals, input$distance, input$passes, input$crosses, input$soloRuns)
+    df()
     
-        
-    if(input$Position=="F"){
+    ##cluster2 <- apply(aa, 1, closest.cluster)
     
-    theGraph <- ggplot(data=playerData[playerData$POSITION=="F",], aes(x=TOP_SPEED,
-                y=DISTANCE_COVERED, group=POSITION)) + ggtitle("Forwards")  + ylab("Distance COvered per Game (km)") + xlab("Top SPeed (km/h)") + geom_point(aes(size=4, colour=POSITION), show_guide=FALSE)
-    }
-     
+  })
+  
+  output$oresults <- renderText({ 
+  df1 <- df()
+  means <- apply(training[,-c(1,2)], 2, mean, na.rm=TRUE)
+  sds <- apply(training[,-c(1,2)], 2, sd, na.rm=TRUE)
+  df1 <- (df1-means)/sds
+  
+  #df1 <- c(((df1[1]-mean(training[,3]))/sd(training[,3])), ((df1[2]-mean(training[,4]))/sd(training[,4])), ((df1[3]-mean(training[,5]))/sd(training[,5])),  ((df1[4]-mean(training[,6]))/sd(training[,6])),  ((df1[5]-mean(training[,7]))/sd(training[,7])), ((df1[6]-mean(training[,8]))/sd(training[,8])) )
+  closest.cluster(df1)
+  
+  })
+  
+ 
+  output$oresults2 <- renderTable({ 
+    df1 <- df()
+    means <- apply(training[,-c(1,2)], 2, mean, na.rm=TRUE)
+    sds <- apply(training[,-c(1,2)], 2, sd, na.rm=TRUE)
+    df1 <- (df1-means)/sds
     
-    if(input$Position=="M"){
-      
-      theGraph <- ggplot(data=playerData[playerData$POSITION=="M",], aes(x=TOP_SPEED,
-                y=DISTANCE_COVERED, group=POSITION)) + ggtitle("Midfield") + ylab("Distance COvered per Game (km)") + xlab("Top SPeed (km/h)")+ geom_point(aes(size=4, colour=POSITION), show_guide=FALSE)
-    }
-    
-    if(input$Position=="D"){
-      
-      theGraph <- ggplot(data=playerData[playerData$POSITION=="D",], aes(x=TOP_SPEED,
-               y=DISTANCE_COVERED, group=POSITION)) + ggtitle("Defenders") + ylab("Distance COvered per Game (km)") + xlab("Top SPeed (km/h)") + geom_point(aes(size=4, colour=POSITION), show_guide=FALSE)
-    }
-    
-    if(input$Position=="G"){
-      
-      theGraph <- ggplot(data=playerData[playerData$POSITION=="D",], aes(x=TOP_SPEED,
-              y=DISTANCE_COVERED, group=POSITION)) + ggtitle("Goalies") + ylab("Distance COvered per Game (km)") + xlab("Top SPeed (km/h)") + geom_point(aes(size=4, colour=POSITION), show_guide=FALSE)
-    }
+    compResults(closest.cluster(df1))
     
     
-   if(input$smoother){
-    theGraph <- theGraph + geom_smooth(method="lm") 
-    }
-   
-   print(theGraph) 
-
   })
   
   
