@@ -78,17 +78,14 @@ shinyUI(pageWithSidebar(
   mainPanel(
     
     h4("This is an analysis of player performance in the 2014 world cup"),
-    p("the graph below shows a scatter plot of player top speed and distance covered on a per game basis. Use the widgets below to isoloate diferent positions."),
+    p("the graph below shows a scatter plot of key variables that are used in the subsequent cluster analysis. All variables are normalized to a per game basis (90 minutes). Use the top widgets below to explore the data."),
     
     plotOutput("graph1"),
     
     h4("comparator analysis"),
     
-    verbatimTextOutput("oresults"),
-    
-    tableOutput("view"),
-    
-    h5("Based on the statistics entered, here are the most comparable players, based on the 2014 world cup statistics"),
+        
+    h5("Based on the statistics entered, here are the most comparable players (based on the 2014 world cup statistics. Change the sliders to see how the comparable group of players changes."),
     
     tableOutput("oresults2")
     
